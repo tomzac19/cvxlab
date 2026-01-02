@@ -219,6 +219,87 @@ class Database:
 
                 self.sqltools.dataframe_to_table(table_name, dataframe)
 
+    def update_sets_in_sqlite_database(
+            self,
+            set_keys_list: List[str] = [],
+            update_mode: Literal['all', 'filters', 'aggregations'] = 'all',
+    ) -> None:
+        """Update sets data in the SQLite database.
+
+        This method updates the data of specified sets in the SQLite database.
+        It iterates over each set in the Index, and if the set's key is in the
+        provided 'set_keys_list' (or if the list is empty, indicating all sets),
+        it updates the corresponding table in the database with the data from
+        the set's 'data' attribute.
+
+        Args:
+            set_keys_list(List[str], optional): A list of set keys to update.
+                If empty, all sets in the Index are updated. Defaults to [].
+            update_mode(Literal['all', 'filters', 'aggregations'], optional):
+                Specifies the update mode. Defaults to 'all'.
+
+        Raises:
+            MissingDataError: If the 'data' attribute of a set is None, indicating
+                incomplete setup.
+        """
+        self.logger.debug(
+            f"Updating Sets in '{self.settings['sqlite_database_file']}'.")
+
+        with db_handler(self.sqltools):
+            for set_key, set_instance in self.index.sets.items():
+                set_instance: SetTable
+
+                if set_keys_list != [] and set_key not in set_keys_list:
+                    continue
+
+                if set_instance.data is None:
+                    msg = f"Set table '{set_instance.name}' | Data not found."
+                    self.logger.error(msg)
+                    raise exc.MissingDataError(msg)
+
+                dataframe_new = set_instance.data.copy()
+                dataframe_current = self.sqltools.table_to_dataframe(
+                    table_name=set_instance.table_name,
+                )
+
+                if update_mode == 'all':
+                    dataframe_final = dataframe_new
+                else:
+                    if update_mode == 'filters':
+                        headers_dict = set_instance.set_filters_headers
+                    elif update_mode == 'aggregations':
+                        headers_dict = set_instance.set_aggregations_headers
+
+                if not headers_dict:
+                    self.logger.warning(
+                        f"Set table '{set_instance.name}' | "
+                        f"No '{update_mode}' headers defined. Skipping update."
+                    )
+                    continue
+
+                headers_list = list(headers_dict.values())
+                dataframe_final = dataframe_current.copy()
+                for header in headers_list:
+                    dataframe_final[header] = dataframe_new[header]
+
+                new_columns = set(dataframe_final.columns) - set(
+                    dataframe_current.columns)
+
+                if new_columns:
+                    for column in new_columns:
+                        self.sqltools.add_table_column(
+                            table_name=set_instance.table_name,
+                            column_name=column,
+                            column_type=Defaults.Labels.GENERIC_FIELD_TYPE,
+                        )
+
+                self.sqltools.dataframe_to_table(
+                    table_name=set_instance.table_name,
+                    dataframe=dataframe_final,
+                    action='overwrite',
+                    force_overwrite=True,
+                )
+
     def generate_blank_sqlite_data_tables(self) -> None:
         """Generate empty data tables in the SQLite database.
 

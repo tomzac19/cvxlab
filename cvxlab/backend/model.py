@@ -832,6 +832,31 @@ class Model:
                         f"'{config['file_name']}' file not found in model directory."
                     )
 
+    def update_sets_tables(
+            self,
+            set_keys_list: List[str] = [],
+            update_mode: Literal['all', 'filters', 'aggregations'] = 'all',
+    ) -> None:
+        """Update sets tables in the SQLite database.
+
+        This method updates sets tables in the SQLite database. The user can choose
+        to update all sets, or only specific sets (with the 'set_keys_list' attribute).
+        Additionally, the user can specify the update mode, which can be 'all',
+        'filters', or 'aggregations'.
+
+        Args:
+            set_keys_list (List[str], optional): A list of set keys to update.
+                If empty, all sets are updated. Defaults to [].
+            update_mode (Literal['all', 'filters', 'aggregations'], optional):
+                The update mode. Can be 'all' (update all set data), 'filters'
+                (update only filters), or 'aggregations' (update only aggregations).
+                Defaults to 'all'.
+        """
+        self.core.database.update_sets_in_sqlite_database(
+            set_keys_list=set_keys_list,
+            update_mode=update_mode,
+        )
+
     def variable(
             self,
             name: str,

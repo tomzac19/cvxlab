@@ -934,6 +934,9 @@ class Index:
         This method reads data from Excel sets tables and generates the related 
         DataFrames in set tables in the Index. If any set already contains data, 
         prompts the user to decide whether to overwrite the existing data.
+        This method ensures that all sets defined in the Index are populated with
+        the appropriate data from the specified Excel file, handling cases where
+        sets may be defined as copies of other sets.
 
         Args:
             excel_file_name (str): The name of the Excel file to load.
@@ -941,12 +944,8 @@ class Index:
                 file is located.
 
         Raises:
-            exc.MissingDataError: If a table is referenced in a set but not found
-                in the Excel file and not defined to be copied from another set,
-                or if necessary headers are missing.
-            exc.SettingsError: If a table is defined to be copied from another set,
-                but the referenced set does not exist or its data is not defined
-                or is in the wrong format.
+            exc.SettingsError:  If errors are encountered while loading sets, 
+                such as missing tables or mismatched headers, detailed in the logs.
         """
         if all(
             set_instance.data is None
@@ -968,24 +967,44 @@ class Index:
 
         sets_excel_keys = sets_excel_data.keys()
 
+        problems = []
+
         for set_instance in self.sets.values():
             set_instance: SetTable
 
             if set_instance.table_name in sets_excel_keys:
-                set_instance.data = sets_excel_data[set_instance.table_name]
+
+                set_excel_table = sets_excel_data[set_instance.table_name]
+
+                # check if table headers are well defined
+                if (
+                    not util.items_in_list(
+                        items=set_excel_table.columns,
+                        control_list=set_instance.set_excel_file_headers,
+                    ) or
+                    not util.items_in_list(
+                        items=set_instance.set_excel_file_headers,
+                        control_list=set_excel_table.columns,
+                    )
+                ):
+                    msg = f"Set table '{set_instance.name}' | Excel Set table headers " \
+                        "do not match Set table structure in Settings."
+                    problems.append(msg)
+
+                set_instance.data = set_excel_table
                 continue
 
             if not set_instance.copy_from:
-                msg = f"Table '{set_instance.table_name}' not included in " \
+                msg = f"Set table '{set_instance.name}' | Table not included in " \
                     "the excel sets file, nor defined as a copy of another " \
                     "existing set. Check sets definition."
-                self.logger.error(msg)
-                raise exc.MissingDataError(msg)
+                problems.append(msg)
+                continue
 
             if set_instance.table_headers is None:
-                msg = f"Headers for table '{set_instance.table_name}' not defined."
+                msg = f"Set table '{set_instance.name}' | Headers not defined."
                 self.logger.error(msg)
-                raise exc.MissingDataError(msg)
+                continue
 
             set_to_be_copied = set_instance.copy_from
 
@@ -994,16 +1013,21 @@ class Index:
                     isinstance(self.sets[set_to_be_copied].data, pd.DataFrame):
 
                 set_instance.data = self.sets[set_to_be_copied].data.copy()
-                set_instance.data.columns = [
-                    header[0]
-                    for header in set_instance.table_headers.values()
-                ]
+                set_instance.data.columns = set_instance.set_excel_file_headers
+
             else:
-                msg = f"Table '{set_to_be_copied}' not included in " \
-                    "the defined Sets, or data not defined or defined in the " \
-                    "wrong format. Check set name and data."
-                self.logger.error(msg)
-                raise exc.SettingsError(msg)
+                msg = f"Set table '{set_instance.name}' | Source table " \
+                    f"'{set_to_be_copied}' not included in the defined Sets, or " \
+                    "data not defined or defined in the wrong format. Check set " \
+                    "name and data."
+                problems.append(msg)
+                continue
+
+        if problems:
+            for problem in problems:
+                self.logger.error(problem)
+            raise exc.SettingsError(
+                "Errors encountered while loading sets. See logs for details.")
 
     def load_coordinates_to_data_index(self) -> None:
         """Fetch coordinates values from sets to data tables.

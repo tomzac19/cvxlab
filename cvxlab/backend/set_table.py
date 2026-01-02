@@ -68,6 +68,7 @@ class SetTable:
         self.table_structure: Dict[str, Any] = {}
         self.table_headers: Dict[str, List[str]] = {}
         self.table_filters: Dict[int, Any] = {}
+        self.table_aggregations: Dict[int, Any] = {}
         self.set_categories: Dict[str, Any] = {}
         self.data: Optional[pd.DataFrame] = None
 
@@ -125,6 +126,21 @@ class SetTable:
             return {
                 key: value['header']
                 for key, value in self.table_filters.items()
+            }
+        return None
+
+    @property
+    def set_aggregations_headers(self) -> Dict[int, str] | None:
+        """Return a mapping from aggregation index to their corresponding keys.
+
+        Returns:
+            Optional[Dict[int, str]]: Dictionary mapping aggregation indices 
+                to related keys, or None if not defined.
+        """
+        if self.table_aggregations:
+            return {
+                key: value['header']
+                for key, value in self.table_aggregations.items()
             }
         return None
 
@@ -214,9 +230,9 @@ class SetTable:
         generic_field_type = Defaults.Labels.GENERIC_FIELD_TYPE
 
         # Fetching filters and aggregations
-        self.table_filters = self.table_structure.get(filters_key, None)
+        self.table_filters = self.table_structure.get(filters_key, {})
         self.table_aggregations = self.table_structure.get(
-            aggregations_key, None)
+            aggregations_key, {})
 
         # Fetching table headers
         name_header = self.table_structure.get(name_key, None)
