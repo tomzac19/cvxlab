@@ -9,7 +9,7 @@ loading data from Excel files, generating data input files, and managing the
 SQLite database interactions via the SQLManager.
 """
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 import pandas as pd
 
