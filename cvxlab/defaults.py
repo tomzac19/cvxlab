@@ -42,10 +42,10 @@ class Defaults:
         - SETUP_INFO: Dictionary mapping setup information groups.
         - SETUP_XLSX_FILE: Default name of the setup Excel file.
         - SETS_FILE: Default name of the sets Excel file.
-        - AVAILABLE_SOURCES: List of possible formats for input data sources.
+        - AVAILABLE_SETUP_SOURCES: List of possible formats for input data sources.
         - INPUT_DATA_DIR: Default name for input data directory.
-        - INPUT_DATA_FILE: Default name for the input data file (for single input data file).
-        - DATA_FILES_EXTENSION: Default extension for data file/s.
+        - INPUT_DATA_FILE_NAME: Default name for the input data file (for single input data file).
+        - AVAILABLE_DATA_FILES_EXTENSIONS: Default extensions for data file/s.
         - SQLITE_DATABASE_FILE: Default name for the SQLite database file.
         - SQLITE_DATABASE_FILE_BKP: Default name for the SQLite database backup file.
         - SQLITE_DATABASE_FILE_TEST: Default name for the SQLite database test file.
@@ -60,10 +60,10 @@ class Defaults:
         }
         SETUP_XLSX_FILE = 'model_settings.xlsx'
         SETS_FILE = 'sets.xlsx'
-        AVAILABLE_SOURCES = ['yml', 'xlsx']
+        AVAILABLE_SETUP_SOURCES = ['yml', 'xlsx']
+        AVAILABLE_DATA_FILES_EXTENSIONS = ['xlsx', 'csv']
         INPUT_DATA_DIR = 'input_data'
-        INPUT_DATA_FILE = 'input_data.xlsx'
-        DATA_FILES_EXTENSION = '.xlsx'
+        INPUT_DATA_FILE_NAME = 'input_data'  # add extension downstream
         SQLITE_DATABASE_FILE = 'database.db'
         SQLITE_DATABASE_FILE_BKP = 'database_bkp.db'
         SQLITE_DATABASE_FILE_TEST = 'database_expected.db'
