@@ -460,6 +460,7 @@ class Database:
 
     def generate_blank_data_input_files(
         self,
+        file_extension: Optional[str] = None,
         table_key_list: List[str] = [],
     ) -> None:
         """Generate blank data input files for exogenous data tables.
@@ -473,15 +474,30 @@ class Database:
         table. Otherwise, all tables are exported to a single file as separate tabs.
 
         Args:
+            file_extension (Optional[str]): The format of the input data files. 
+                Defaults to None. If None, file type is taken from settings.
             table_key_list (List[str], optional): A list of table keys to generate
                 input files for. If empty, all exogenous data tables in the Index
                 are processed. Defaults to an empty list.
         """
-        file_extension = Defaults.ConfigFiles.DATA_FILES_EXTENSION
+        default_file_name = Defaults.ConfigFiles.INPUT_DATA_FILE_NAME
         allowed_var_types = Defaults.SymbolicDefinitions.VARIABLE_TYPES
+
+        if file_extension is None:
+            file_extension = self.settings['input_data_files_type']
+        else:
+            util.validate_selection(
+                selection=file_extension,
+                valid_options=Defaults.ConfigFiles.AVAILABLE_DATA_FILES_EXTENSIONS,
+            )
 
         if not Path(self.paths['input_data_dir']).exists():
             self.files.create_dir(self.paths['input_data_dir'])
+
+        if not self.settings['multiple_input_files'] and file_extension == 'csv':
+            msg = "'csv' data file format is only allowed for multiple input files."
+            self.logger.error(msg)
+            raise exc.SettingsError(msg)
 
         with db_handler(self.sqltools):
             for table_key, table in self.index.data.items():
@@ -497,16 +513,32 @@ class Database:
                     continue
 
                 if self.settings['multiple_input_files']:
-                    output_file_name = table_key + file_extension
+                    output_file_name = f"{table_key}.{file_extension}"
+                    force_overwrite = False
                 else:
-                    output_file_name = Defaults.ConfigFiles.INPUT_DATA_FILE
+                    output_file_name = f"{default_file_name}.{file_extension}"
+                    force_overwrite = True
 
-                self.sqltools.table_to_excel(
-                    excel_filename=output_file_name,
-                    excel_dir_path=self.paths['input_data_dir'],
-                    table_name=table_key,
-                    blank_value_field=True
-                )
+                dataframe = self.sqltools.table_to_dataframe(table_key)
+
+                if file_extension == 'xlsx':
+                    self.files.dataframe_to_excel(
+                        dataframe=dataframe,
+                        excel_filename=output_file_name,
+                        excel_dir_path=self.paths['input_data_dir'],
+                        sheet_name=table_key,
+                        force_overwrite=force_overwrite,
+                    )
+                elif file_extension == 'csv':
+                    self.files.dataframe_to_csv(
+                        dataframe=dataframe,
+                        csv_filename=output_file_name,
+                        csv_dir_path=self.paths['input_data_dir'],
+                    )
+                else:
+                    msg = f"File extension '{file_extension}' not supported."
+                    self.logger.error(msg)
+                    raise exc.SettingsError(msg)
 
     def load_data_input_files_to_database(
         self,
@@ -533,7 +565,7 @@ class Database:
             "Loading data from input file/s filled by the user "
             "to SQLite database.")
 
-        file_extension = Defaults.ConfigFiles.DATA_FILES_EXTENSION
+        file_extension = Defaults.ConfigFiles.AVAILABLE_DATA_FILES_EXTENSIONS
         allowed_var_types = Defaults.SymbolicDefinitions.VARIABLE_TYPES
 
         if table_key_list == []:
@@ -584,7 +616,7 @@ class Database:
         else:
             data = self.files.excel_to_dataframes_dict(
                 excel_file_dir_path=self.paths['input_data_dir'],
-                excel_file_name=Defaults.ConfigFiles.INPUT_DATA_FILE,
+                excel_file_name=Defaults.ConfigFiles.INPUT_DATA_FILE_NAME,
             )
 
             with db_handler(self.sqltools):

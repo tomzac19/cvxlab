@@ -67,7 +67,7 @@ def create_model_dir(
         f"{template_file_type} configuration files.")
 
     util.validate_selection(
-        valid_selections=config_files.AVAILABLE_SOURCES,
+        valid_selections=config_files.AVAILABLE_SETUP_SOURCES,
         selection=template_file_type)
 
     if model_dir_path.exists():

@@ -734,61 +734,6 @@ class SQLManager:
             f"entries: {len(data)}"
         )
 
-    def table_to_excel(
-            self,
-            excel_filename: str,
-            excel_dir_path: Path | str,
-            table_name: str,
-            blank_value_field: bool = False,
-    ) -> None:
-        """Export a SQLite table to an Excel file.
-
-        This method prepares the data from the table and writes it to an Excel
-        file at the specified location, offering options to overwrite existing
-        files based on user input.
-
-        Args:
-            excel_filename (str): The filename for the Excel export.
-            excel_dir_path (Path | str): The directory path where the Excel file
-                will be saved.
-            table_name (str): The name of the table whose data is being exported.
-            blank_value_field (bool, optional): If True, the 'values' field in
-                the exported data will be set to None. Defaults to False.
-        """
-        self.check_table_exists(table_name)
-
-        excel_file_path = Path(excel_dir_path, excel_filename)
-
-        mode = 'a' if excel_file_path.exists() else 'w'
-        if_sheet_exists = 'replace' if mode == 'a' else None
-
-        if excel_file_path.exists() and if_sheet_exists != 'replace':
-            self.logger.warning(f"File {excel_filename} already exists.")
-            if not util.get_user_confirmation(f"Overwrite file {excel_filename}?"):
-                self.logger.warning(
-                    f"File '{excel_filename}' not overwritten.")
-                return
-
-        self.logger.debug(
-            f"SQLite table '{table_name}' | exported to {excel_filename}.")
-
-        with pd.ExcelWriter(
-            path=excel_file_path,
-            engine=self.xls_engine,
-            mode=mode,
-            if_sheet_exists=if_sheet_exists,
-        ) as writer:
-
-            query = f'SELECT * FROM {table_name}'
-            df = pd.read_sql_query(query, self.connection)
-
-            if blank_value_field:
-                values_column = Defaults.Labels.VALUES_FIELD['values'][0]
-                if values_column in df.columns:
-                    df[values_column] = None
-
-            df.to_excel(writer, sheet_name=table_name, index=False)
-
     def table_to_dataframe(
             self,
             table_name: str,

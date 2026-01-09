@@ -53,13 +53,14 @@ class Model:
             model_dir_name: str,
             main_dir_path: str,
             model_settings_from: Literal['yml', 'xlsx'] = 'xlsx',
+            detailed_validation: bool = False,
             use_existing_data: bool = False,
             multiple_input_files: bool = False,
+            input_data_files_type: Literal['xlsx', 'csv'] = 'xlsx',
             import_custom_operators: bool = False,
             import_custom_constants: bool = False,
             log_level: Literal['info', 'debug', 'warning', 'error'] = 'info',
             log_format: Literal['standard', 'detailed'] = 'standard',
-            detailed_validation: bool = False,
     ):
         """Initialize the Model instance with specified configurations.
 
@@ -78,6 +79,9 @@ class Model:
             model_settings_from (Literal['yml', 'xlsx'], optional): The format
                 of the model settings file. Can be either 'yml' or 'xlsx'. 
                 Defaults to 'xlsx'.
+            detailed_validation (bool, optional): if True, performs detailed
+                validation logging of data and model settings during initialization.
+                Defaults to False.
             use_existing_data (bool, optional): if True, generation of Model
                 instance is also loading model coordinates and initializing
                 numerical problems. Note that setup files and model database should
@@ -86,6 +90,8 @@ class Model:
                 are generated as one file per data table. If False, all data tables
                 are generated in a single Excel file with multiple tabs. Defaults 
                 to False.
+            input_data_files_type (Literal['xlsx', 'csv'], optional): The format
+                of the input data files. Can be either 'xlsx' or 'csv'. Defaults to 'xlsx'.
             import_custom_operators (bool, optional): if True, user-defined
                 operators are imported during initialization. Defaults to False.
             import_custom_constants (bool, optional): if True, user-defined
@@ -94,9 +100,6 @@ class Model:
                 The logging level for the logger. Defaults to 'info'.
             log_format (Literal['standard', 'detailed'], optional): The logging 
                 format for the logger. Defaults to 'standard'.
-            detailed_validation (bool, optional): if True, performs detailed
-                validation logging of data and model settings during initialization.
-                Defaults to False.
         """
         config = Defaults.ConfigFiles
         model_dir_path = Path(main_dir_path) / model_dir_name
@@ -119,12 +122,13 @@ class Model:
                 'model_settings_from': model_settings_from,
                 'use_existing_data': use_existing_data,
                 'multiple_input_files': multiple_input_files,
+                'input_data_files_type': input_data_files_type,
                 'import_custom_operators': import_custom_operators,
                 'import_custom_constants': import_custom_constants,
                 'detailed_validation': detailed_validation,
                 'sets_xlsx_file': config.SETS_FILE,
                 'input_data_dir': config.INPUT_DATA_DIR,
-                'input_data_file': config.INPUT_DATA_FILE,
+                'input_data_file': config.INPUT_DATA_FILE_NAME,
                 'sqlite_database_file': config.SQLITE_DATABASE_FILE,
                 'sqlite_database_file_test': config.SQLITE_DATABASE_FILE_TEST,
             })
@@ -137,6 +141,7 @@ class Model:
             })
 
             self.check_model_dir()
+            self.check_settings_consistency()
             self.import_custom_scripts()
 
             self.core = Core(
@@ -216,7 +221,7 @@ class Model:
         subdir_to_check = []
 
         util.validate_selection(
-            valid_selections=Defaults.ConfigFiles.AVAILABLE_SOURCES,
+            valid_selections=Defaults.ConfigFiles.AVAILABLE_SETUP_SOURCES,
             selection=files_type,
         )
 
@@ -261,6 +266,37 @@ class Model:
         else:
             [self.logger.error(msg) for msg in err_msg]
             raise exc.SettingsError("Model directory validation | Failed.")
+
+    def check_settings_consistency(self) -> None:
+        """Check consistency of model settings.
+
+        This method checks the consistency of the model settings, ensuring that
+        the configurations provided by the user are coherent.
+        This method is called during the initialization of the Model instance, and 
+        it is not meant to be called directly by the user.
+
+        Raises:
+            exc.SettingsError: If any inconsistency or invalid configuration 
+                is found in the model settings.
+        """
+        err_msg = []
+
+        # Check that input data csv files are only used for multiple input files
+        if self.settings['input_data_files_type'] == 'csv' and not \
+                self.settings['multiple_input_files']:
+            err_msg.append(
+                "Input data files of type 'csv' can only be used when "
+                "'multiple_input_files' setting is True."
+            )
+
+        # Add further checks below...
+
+        if err_msg == []:
+            self.logger.debug(
+                f"Model settings validation | Success.")
+        else:
+            [self.logger.error(msg) for msg in err_msg]
+            raise exc.SettingsError("Model settings validation | Failed.")
 
     def load_model_coordinates(self, fetch_foreign_keys: bool = True) -> None:
         """Load sets data and define data tables/variables coordinates.

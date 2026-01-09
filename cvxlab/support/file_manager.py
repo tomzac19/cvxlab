@@ -521,13 +521,61 @@ class FileManager:
         if sheet_name is None:
             sheet_name = str(dataframe)
 
-        with pd.ExcelWriter(
-            excel_file_path,
-            engine=writer_engine,
-            mode=mode,
-            if_sheet_exists=if_sheet_exists,
-        ) as writer:
-            dataframe.to_excel(writer, sheet_name=sheet_name, index=False)
+        try:
+            with pd.ExcelWriter(
+                excel_file_path,
+                engine=writer_engine,
+                mode=mode,
+                if_sheet_exists=if_sheet_exists,
+            ) as writer:
+                dataframe.to_excel(writer, sheet_name=sheet_name, index=False)
+        except Exception as error:
+            msg = f"Error exporting DataFrame to excel: {str(error)}"
+            self.logger.error(msg)
+            raise exc.OperationalError(msg)
+
+    def dataframe_to_csv(
+        self,
+        dataframe: pd.DataFrame,
+        csv_filename: str,
+        csv_dir_path: str,
+        force_overwrite: bool = False,
+    ) -> None:
+        """Export a DataFrame to a CSV file.
+
+        Optionally allows overwriting an existing file.
+
+        Args:
+            dataframe (pd.DataFrame): DataFrame to export.
+            csv_filename (str): Name of the CSV file.
+            csv_dir_path (str): Directory to save the CSV file.
+            force_overwrite (bool): If True, overwrite existing file.
+
+        Raises:
+            Warning: If file exists and not overwritten.
+        """
+        csv_file_path = Path(csv_dir_path, csv_filename)
+
+        if not force_overwrite:
+            if csv_file_path.exists():
+                self.logger.warning(
+                    f"csv file '{csv_filename}' already exists.")
+                if not util.get_user_confirmation(
+                    f"Do you want to overwrite '{csv_filename}'?"
+                ):
+                    self.logger.warning(
+                        f"File '{csv_filename}' not overwritten.")
+                    return
+
+        self.logger.debug(
+            f"Exporting dataframe to '{csv_filename}'.")
+
+        try:
+            dataframe.to_csv(csv_file_path, index=False)
+        except Exception as error:
+            msg = f"Error exporting DataFrame to csv: {str(error)}"
+            self.logger.error(msg)
+            raise exc.OperationalError(msg)
 
     def _open_excel_file(
             self,
@@ -662,7 +710,7 @@ class FileManager:
         Raises:
             SettingsError: If file or tab is empty or source not recognized.
         """
-        available_sources = Defaults.ConfigFiles.AVAILABLE_SOURCES
+        available_sources = Defaults.ConfigFiles.AVAILABLE_SETUP_SOURCES
 
         util.validate_selection(
             selection=source,
