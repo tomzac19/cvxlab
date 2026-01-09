@@ -415,6 +415,13 @@ class Defaults:
             Batch size for SQL operations. It is used to limit the number of rows 
             processed in a single SQL operation to avoid memory issues and speed 
             up database operations.
+        - SQL_MAX_BATCH_MEMORY_MB:
+            Maximum memory (in MB) allocated for SQL batch operations. It is used
+            to dynamically adjust the batch size based on the available memory.
+        - SQL_BATCH_SIZE_MIN:
+            Minimum batch size for SQL operations.
+        - SQL_BATCH_SIZE_MAX:
+            Maximum batch size for SQL operations.
         - CVXPY_DEFAULT_SETTINGS:
             Default settings for CVXPY solver. It includes the default solver, 
             canon backend, and whether to ignore DPP.
@@ -435,6 +442,9 @@ class Defaults:
         ROUNDING_DIGITS_RELATIVE_DIFFERENCE_DB = 5
         SPARSE_MATRIX_ZEROS_THRESHOLD = 0.3
         SQL_BATCH_SIZE = 1000
+        SQL_MAX_BATCH_MEMORY_MB = 10
+        SQL_BATCH_SIZE_MIN = 100
+        SQL_BATCH_SIZE_MAX = 10000
         CVXPY_DEFAULT_SETTINGS = {
             'solver': 'SCIPY',
             'canon_backend': cp.SCIPY_CANON_BACKEND,

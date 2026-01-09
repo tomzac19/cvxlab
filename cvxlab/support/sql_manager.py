@@ -73,12 +73,12 @@ class SQLManager:
             List[str]: A list containing the names of existing tables in the database.
         """
         query = "SELECT name FROM sqlite_master WHERE type='table'"
-        self.execute_query(query)
+        result = self.execute_query(query)
 
-        if self.cursor:
-            tables = self.cursor.fetchall()
+        if result is not None:
+            return [table[0] for table in result]
 
-        return [table[0] for table in tables]
+        return []
 
     def open_connection(self) -> None:
         """Open a connection to the SQLite database.
@@ -128,46 +128,161 @@ class SQLManager:
                 f"Connection to '{self.database_name}' "
                 "already closed or does not exist.")
 
+    def _infer_query_intent(self, query: str) -> tuple[bool, bool]:
+        """Infer default commit and fetch behavior from SQL query string.
+
+        Analyzes the SQL query to detect the leading verb and returns sensible
+        defaults for commit and fetch parameters. This reduces boilerplate and
+        minimizes programmer error.
+
+        Args:
+            query (str): The SQL query to analyze.
+
+        Returns:
+            tuple[bool, bool]: A tuple of (default_commit, default_fetch):
+                (False, True) for read-only queries (SELECT, PRAGMA, EXPLAIN)
+                (True, False) for write queries (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP)
+                (True, False) as fallback for unknown verbs (defensive)
+
+        Example:
+            >>> mgr._infer_query_intent("SELECT * FROM table")
+            (False, True)
+            >>> mgr._infer_query_intent("INSERT INTO table VALUES (?)")
+            (True, False)
+        """
+        # Strip leading whitespace and comments
+        cleaned = query.strip()
+        if cleaned.startswith('--'):
+            # Skip comment lines
+            cleaned = '\n'.join(
+                line.strip() for line in cleaned.split('\n')
+                if not line.strip().startswith('--')
+            ).strip()
+        if cleaned.startswith('/*'):
+            # Skip block comments
+            cleaned = cleaned[cleaned.find('*/') + 2:].strip()
+
+        # Extract leading SQL verb (case-insensitive)
+        verb_match = cleaned.split()[0].upper() if cleaned else ''
+
+        # Read-only verbs: no commit needed, fetch results
+        if verb_match in (
+            'SELECT', 'PRAGMA', 'EXPLAIN', 'WITH'
+        ):
+            inferred_commit, inferred_fetch = False, True
+        # Write verbs: commit needed, no fetch
+        elif verb_match in (
+            'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP'
+        ):
+            inferred_commit, inferred_fetch = True, False
+        # Defensive default: assume write operation
+        else:
+            inferred_commit, inferred_fetch = True, False
+
+        return inferred_commit, inferred_fetch
+
+    def _calculate_optimal_batch_size(
+            self,
+            dataframe: pd.DataFrame,
+            max_batch_memory_mb: Optional[float] = None,
+    ) -> int:
+        """Calculate optimal batch size based on DataFrame memory footprint.
+
+        Adapts batch size to avoid excessive memory usage while maintaining
+        performance. Falls back to sensible default if calculation fails.
+
+        Args:
+            dataframe (pd.DataFrame): The data to be batched.
+            max_batch_memory_mb (Optional[float]): Maximum memory per batch in MB.
+                If None, uses Defaults.NumericalSettings.SQL_MAX_BATCH_MEMORY_MB.
+
+        Returns:
+            int: Optimal batch size (rows per batch).
+        """
+        if dataframe.empty:
+            return Defaults.NumericalSettings.SQL_BATCH_SIZE
+
+        if not max_batch_memory_mb:
+            max_batch_memory_mb = Defaults.NumericalSettings.SQL_MAX_BATCH_MEMORY_MB
+
+        # Estimate memory per row in bytes
+        row_memory_bytes = dataframe.memory_usage(
+            deep=True).sum() / len(dataframe)
+
+        # Convert max memory MB to bytes
+        max_batch_bytes = max_batch_memory_mb * 1024 * 1024
+
+        # Calculate optimal batch size
+        optimal_size = max(1, int(max_batch_bytes / row_memory_bytes))
+
+        # Clamp to reasonable bounds [100, 10000]
+        min_batch = Defaults.NumericalSettings.SQL_BATCH_SIZE_MIN
+        max_batch = Defaults.NumericalSettings.SQL_BATCH_SIZE_MAX
+
+        return max(min_batch, min(optimal_size, max_batch))
+
     def execute_query(
             self,
             query: str,
             params: tuple | List[tuple] = (),
-            many: bool = False,
-            fetch: bool = False,
-            commit: bool = True,
+            fetch: Optional[bool] = None,
+            commit: Optional[bool] = None,
             batch_size: Optional[int] = None,
     ) -> Optional[List[Tuple]]:
         """Execute a specified SQL query using provided parameters.
 
         This method supports executing single or multiple SQL commands with
         optional parameterization, fetching results, and committing changes to
-        the database. Handles and logs specific sqlite3 exceptions related to
-        operation, integrity, database, and programming errors. Rolls back the
-        transaction if an error occurs.
+        the database. Query intent is automatically inferred from the SQL verb,
+        so you typically do not need to specify commit/fetch explicitly.
+
+        Explicit commit/fetch values override inferred defaults, allowing full
+        control when needed.
+
+        Handles and logs specific sqlite3 exceptions related to operation,
+        integrity, database, and programming errors. Rolls back the transaction
+        if an error occurs.
 
         Args:
             query (str): SQL query to be executed.
             params (tuple | List[tuple], optional): Parameters for the SQL query.
+                Defaults to empty tuple.
             many (bool, optional): Whether to execute the query with multiple
-                parameter sets.
-            fetch (bool, optional): Whether to fetch and return the query results.
-            commit (bool, optional): Whether to commit the transaction after
-                query execution.
+                parameter sets. Defaults to False.
+            fetch (Optional[bool], optional): Whether to fetch and return query
+                results. If None, inferred from query verb. Defaults to None.
+            commit (Optional[bool], optional): Whether to commit the transaction
+                after query execution. If None, inferred from query verb.
+                Defaults to None.
             batch_size (Optional[int], optional): Size of batches for executing
-                multiple parameter sets. If None, uses default batch size.
+                multiple parameter sets. If None, uses default batch size from
+                Defaults.NumericalSettings.SQL_BATCH_SIZE.
 
         Returns:
             Optional[List[Tuple]]: Results of the query if fetched; None otherwise.
 
         Raises:
-            exc.OperationalError: If there is an operational issue during query execution.
+            exc.OperationalError: If there is an operational issue during query
+                execution.
             exc.IntegrityError: If there is an integrity issue during query execution.
-            exc.DatabaseError: If there is a database issue during query execution.
+            exc.MissingDataError: If there is a database issue during query execution.
         """
         if self.connection is None or self.cursor is None:
             msg = "Database connection or cursor not initialized."
             self.logger.error(msg)
             raise exc.OperationalError(msg)
+
+        # Infer commit/fetch intent if not explicitly provided
+        inferred_commit, inferred_fetch = self._infer_query_intent(query)
+        final_commit = commit if commit is not None else inferred_commit
+        final_fetch = fetch if fetch is not None else inferred_fetch
+
+        # Infer if executing many parameter sets
+        many = (
+            isinstance(params, (list, tuple))
+            and len(params) > 0
+            and isinstance(params[0], (list, tuple))
+        )
 
         if not batch_size:
             batch_size = Defaults.NumericalSettings.SQL_BATCH_SIZE
@@ -182,27 +297,27 @@ class SQLManager:
             else:
                 self.cursor.execute(query, params)
 
-            if commit:
+            if final_commit:
                 self.connection.commit()
 
-            if fetch:
+            if final_fetch:
                 return self.cursor.fetchall()
 
         except sqlite3.OperationalError as op_error:
             self.connection.rollback()
-            msg = str(op_error)
+            msg = f"OperationalError (query: {query[:100]}...): {str(op_error)}"
             self.logger.error(msg)
             raise exc.OperationalError(msg) from op_error
 
         except sqlite3.IntegrityError as int_error:
             self.connection.rollback()
-            msg = str(int_error)
+            msg = f"IntegrityError (query: {query[:100]}...): {str(int_error)}"
             self.logger.error(msg)
             raise exc.IntegrityError(msg) from int_error
 
         except sqlite3.DatabaseError as db_error:
             self.connection.rollback()
-            msg = str(db_error)
+            msg = f"DatabaseError (query: {query[:100]}...): {str(db_error)}"
             self.logger.error(msg)
             raise exc.MissingDataError(msg) from db_error
 
@@ -242,10 +357,11 @@ class SQLManager:
                 or has multiple primary key columns.
         """
         query = f"PRAGMA table_info({table_name})"
-        self.execute_query(query)
+        table_info = self.execute_query(query)
 
-        if self.cursor:
-            table_info = self.cursor.fetchall()
+        if table_info is None:
+            raise exc.MissingDataError(
+                f"SQLite table '{table_name}' | No schema information.")
 
         primary_key_columns = [
             column[1] for column in table_info if column[5] == 1
@@ -255,10 +371,10 @@ class SQLManager:
             return primary_key_columns[0]
         elif len(primary_key_columns) == 0:
             raise ValueError(
-                f"SQLite table '{table_name}' does NOT have a primary key column.")
+                f"SQLite table '{table_name}' | No primary key column.")
         else:
             raise ValueError(
-                "SQLite table '{table_name}' has multiple primary key "
+                f"SQLite table '{table_name}' | Multiple primary key "
                 f"columns: {primary_key_columns}")
 
     def drop_table(self, table_name: str) -> None:
@@ -286,7 +402,7 @@ class SQLManager:
                 the query fails.
         """
         query = f"PRAGMA table_info('{table_name}')"
-        result = self.execute_query(query, fetch=True)
+        result = self.execute_query(query)
 
         if result is not None:
             table_fields = {}
@@ -379,7 +495,6 @@ class SQLManager:
             column_name: str,
             column_type: str,
             default_value: Any = None,
-            commit: bool = True,
     ) -> None:
         """Add a new column to an existing table in the SQLite database.
 
@@ -406,7 +521,7 @@ class SQLManager:
             if default_value is not None:
                 query += f" DEFAULT {default_value}"
 
-            self.execute_query(query, commit=commit)
+            self.execute_query(query)
 
         except sqlite3.Error as error:
             msg = f"Error adding column to table: {error}"
@@ -423,8 +538,12 @@ class SQLManager:
             int: The number of entries in the table.
         """
         query = f'SELECT COUNT(*) FROM {table_name}'
-        self.execute_query(query)
-        return self.cursor.fetchone()[0]
+        result = self.execute_query(query)
+
+        if result is None:
+            return 0
+
+        return result[0][0]
 
     def delete_table_column_data(
             self,
@@ -566,6 +685,7 @@ class SQLManager:
         action: Literal['update', 'overwrite'] = 'overwrite',
         force_overwrite: bool = False,
         suppress_warnings: bool = False,
+        batch_size: Optional[int] = None,
     ) -> None:
         """Insert or update a SQLite table based on a DataFrame entries.
 
@@ -713,6 +833,13 @@ class SQLManager:
             if not all(dataframe_with_id.columns == df_existing.columns):
                 dataframe_with_id = dataframe_with_id[df_existing.columns]
 
+            # auto-calculate batch_size in query execution
+            batch_calculated = False
+            if batch_size is None:
+                batch_size = self._calculate_optimal_batch_size(
+                    dataframe_with_id)
+                batch_calculated = True
+
             data = [tuple(row) for row in dataframe_with_id.values.tolist()]
             placeholders = ', '.join(['?'] * len(dataframe_with_id.columns))
             query = f"""
@@ -726,13 +853,18 @@ class SQLManager:
             self.logger.error(msg)
             raise exc.SettingsError(msg)
 
-        self.execute_query(query=query, params=data, many=True)
+        self.execute_query(query=query, params=data, batch_size=batch_size)
 
-        self.logger.debug(
+        log_msg = (
             f"SQLite table '{table_name}' | "
             f"action '{action}' | "
             f"entries: {len(data)}"
         )
+
+        if batch_calculated:
+            log_msg += f" | batched data transfer"
+
+        self.logger.debug(log_msg)
 
     def table_to_excel(
             self,
@@ -853,7 +985,6 @@ class SQLManager:
         table = self.execute_query(
             query=query,
             params=tuple(flattened_values),
-            fetch=True
         )
 
         dataframe = pd.DataFrame(data=table, columns=table_columns_labels)
@@ -909,9 +1040,11 @@ class SQLManager:
             FROM {table_name}
             WHERE "{column_to_inspect}" IS NULL
         """
-        rows = self.execute_query(query, fetch=True)
+        rows = self.execute_query(query)
+
         if rows is None:
             return []
+
         return [row[0] for row in rows]
 
     def get_related_table_keys(
