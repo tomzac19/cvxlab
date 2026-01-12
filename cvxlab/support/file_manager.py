@@ -629,7 +629,6 @@ class FileManager:
         try:
             df = xlsx.parse(
                 sheet_name=sheet_name,
-                dtype_backend="python" if hasattr(pd, "options") else None,
                 keep_default_na=True,
             )
         except Exception as e:
@@ -638,6 +637,32 @@ class FileManager:
             raise exc.OperationalError(msg)
 
         return df
+
+    def _parse_csv_to_dataframe(self, file_path: Path | str,) -> pd.DataFrame:
+        """Parse a CSV file and return as a DataFrame.
+
+        Args:
+            file_path (Path | str): Path to the CSV file.
+
+        Returns:
+            pd.DataFrame: Parsed CSV data as a DataFrame.
+
+        Raises:
+            OperationalError: If parsing fails.
+        """
+        file_path = Path(file_path)
+
+        try:
+            dataframe = pd.read_csv(
+                file_path,
+                keep_default_na=True,
+            )
+        except Exception as error:
+            msg = f"CSV parsing error | file '{file_path.name}' | {str(error)}"
+            self.logger.error(msg)
+            raise exc.OperationalError(msg)
+
+        return dataframe
 
     def excel_to_dataframes_dict(
             self,
@@ -690,6 +715,48 @@ class FileManager:
                 xlsx=xlsx, sheet_name=sheet)
 
         return df_dict
+
+    def file_to_dataframe(
+            self,
+            file_name: str,
+            file_dir_path: Path | str,
+    ) -> pd.DataFrame:
+        """Load data from a file into a DataFrame.
+
+        Args:
+            file_name (str): Name of the file to load.
+            file_dir_path (Path | str): Directory containing the file.
+
+        Returns:
+            pd.DataFrame: Loaded DataFrame.
+        """
+        file_path = Path(file_dir_path) / file_name
+
+        if not file_path.exists():
+            msg = f"File '{file_name}' does not exist."
+            self.logger.error(msg)
+            raise FileNotFoundError(msg)
+
+        file_extension = file_path.suffix.lower().lstrip('.')
+        file_base_name = file_path.stem
+
+        if file_extension == 'xlsx':
+            df_dict = self.excel_to_dataframes_dict(
+                excel_file_name=file_name,
+                excel_file_dir_path=file_dir_path,
+                sheet_names=[file_base_name],
+            )
+            dataframe = df_dict[file_base_name]
+
+        elif file_extension == 'csv':
+            dataframe = self._parse_csv_to_dataframe(file_path)
+
+        else:
+            msg = f"Unsupported file extension '{file_extension}'."
+            self.logger.error(msg)
+            raise exc.SettingsError(msg)
+
+        return dataframe
 
     def load_data_structure(
             self,

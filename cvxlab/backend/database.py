@@ -565,8 +565,8 @@ class Database:
             "Loading data from input file/s filled by the user "
             "to SQLite database.")
 
-        file_extension = Defaults.ConfigFiles.AVAILABLE_DATA_FILES_EXTENSIONS
-        allowed_var_types = Defaults.SymbolicDefinitions.VARIABLE_TYPES
+        file_extension = self.settings['input_data_files_type']
+        multiple_data_file = self.settings['multiple_input_files']
 
         if table_key_list == []:
             table_key_list = self.index.data.keys()
@@ -579,61 +579,56 @@ class Database:
                 self.logger.error(msg)
                 raise ValueError(msg)
 
-        if self.settings['multiple_input_files']:
-            data = {}
+        if not multiple_data_file and file_extension != 'xlsx':
+            msg = "Single data file is only allowed in 'xlsx' format."
+            self.logger.error(msg)
+            raise exc.SettingsError(msg)
 
-            with db_handler(self.sqltools):
-                for table_key, table in self.index.data.items():
-                    table: DataTable
+        # case 1: load from a single excel file with multiple tabs
+        if not self.settings['multiple_input_files']:
 
-                    if table_key not in table_key_list:
-                        continue
-
-                    if table.type not in [
-                        allowed_var_types['ENDOGENOUS'],
-                        allowed_var_types['CONSTANT']
-                    ]:
-                        file_name = table_key + file_extension
-
-                        data.update(
-                            self.files.excel_to_dataframes_dict(
-                                excel_file_dir_path=self.paths['input_data_dir'],
-                                excel_file_name=file_name,
-                            )
-                        )
-
-                        data_to_table = util.normalize_dataframe(
-                            df=data[table_key]
-                        )
-
-                        self.sqltools.dataframe_to_table(
-                            table_name=table_key,
-                            dataframe=data_to_table,
-                            force_overwrite=force_overwrite,
-                            action='update',
-                        )
-
-        else:
             data = self.files.excel_to_dataframes_dict(
                 excel_file_dir_path=self.paths['input_data_dir'],
                 excel_file_name=Defaults.ConfigFiles.INPUT_DATA_FILE_NAME,
             )
 
-            with db_handler(self.sqltools):
-                for table_key, table in data.items():
-                    table: pd.DataFrame
+        # case 2: load from multiple files
+        else:
+            data = {}
 
-                    if table_key not in table_key_list:
-                        continue
+            for table_key, table in self.index.data.items():
+                table: DataTable
 
-                    table = util.normalize_dataframe(df=table)
+                if table_key not in table_key_list:
+                    continue
 
-                    self.sqltools.dataframe_to_table(
-                        table_name=table_key,
-                        dataframe=table,
-                        force_overwrite=force_overwrite,
-                        action='update',
+                if table.type not in [
+                    Defaults.SymbolicDefinitions.VARIABLE_TYPES['ENDOGENOUS'],
+                    Defaults.SymbolicDefinitions.VARIABLE_TYPES['CONSTANT']
+                ]:
+                    file_name = f"{table_key}.{file_extension}"
+
+                    data[table_key] = self.files.file_to_dataframe(
+                        file_name=file_name,
+                        file_dir_path=self.paths['input_data_dir'],
                     )
+
+        # commit to database
+        with db_handler(self.sqltools):
+            for table_key, table in data.items():
+                table: pd.DataFrame
+
+                if table_key not in table_key_list:
+                    continue
+
+                table = util.normalize_dataframe(df=table)
+
+                self.sqltools.dataframe_to_table(
+                    table_name=table_key,
+                    dataframe=table,
+                    force_overwrite=force_overwrite,
+                    action='update',
+                )
 
     def fill_nan_values_in_database(
             self,

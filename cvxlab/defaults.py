@@ -63,7 +63,7 @@ class Defaults:
         AVAILABLE_SETUP_SOURCES = ['yml', 'xlsx']
         AVAILABLE_DATA_FILES_EXTENSIONS = ['xlsx', 'csv']
         INPUT_DATA_DIR = 'input_data'
-        INPUT_DATA_FILE_NAME = 'input_data'  # add extension downstream
+        INPUT_DATA_FILE_NAME = 'input_data'
         SQLITE_DATABASE_FILE = 'database.db'
         SQLITE_DATABASE_FILE_BKP = 'database_bkp.db'
         SQLITE_DATABASE_FILE_TEST = 'database_expected.db'
