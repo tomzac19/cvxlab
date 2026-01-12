@@ -586,10 +586,11 @@ class Database:
 
         # case 1: load from a single excel file with multiple tabs
         if not self.settings['multiple_input_files']:
+            file_name = Defaults.ConfigFiles.INPUT_DATA_FILE_NAME
 
             data = self.files.excel_to_dataframes_dict(
                 excel_file_dir_path=self.paths['input_data_dir'],
-                excel_file_name=Defaults.ConfigFiles.INPUT_DATA_FILE_NAME,
+                excel_file_name=f"{file_name}.{file_extension}",
             )
 
         # case 2: load from multiple files
