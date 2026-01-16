@@ -808,25 +808,28 @@ class Problem:
                     for key in token_patterns.keys()
                 }
 
-                # get tokens chars length matching expression length
-                expression_len = len(expression.replace(' ', ''))
-                tokens_len = sum(
-                    len(item)
+                # identify unrecognized tokens in the expression
+                all_tokens = [
+                    token
                     for tokens_list in tokens.values()
-                    for item in tokens_list
-                )
+                    for token in tokens_list
+                ]
+                all_tokens_sorted = sorted(all_tokens, key=len, reverse=True)
 
-                if tokens_len != expression_len:
+                residual = expression.replace(' ', '')
+                for token in all_tokens_sorted:
+                    residual = residual.replace(token, '', 1)
+
+                if residual:
                     errors.append(
-                        msg_str + f"Items in expression not recognized as tokens. "
-                        f"(expression length: {expression_len}, tokens length: {tokens_len}. "
+                        msg_str + f"Unrecognized chars: {list(residual)})"
                     )
 
                 # check if parentheses are balanced
                 if not util_text.balanced_parentheses(tokens['parentheses']):
                     errors.append(msg_str + "Parentheses are not balanced.")
 
-                # spot non-allowed variables/operators
+                # spot non-allowed variables/symbolic operators
                 non_allowed_tokens = [
                     token for token in tokens['text']
                     if token not in self.index.list_variables
@@ -834,7 +837,7 @@ class Problem:
                 ]
                 if non_allowed_tokens:
                     errors.append(
-                        msg_str + f"Non-allowed tokens: {non_allowed_tokens}.")
+                        msg_str + f"Non-allowed variable/operator: {non_allowed_tokens}.")
 
                 # variables names not overlapped with custom operators
                 non_allowed_vars_keys = [
