@@ -671,8 +671,11 @@ class Problem:
                 f"Validation error report ===================================")
             if self.settings['detailed_validation']:
                 for key, error_log in invalid_entries.items():
-                    self.logger.error(
-                        f"Validation error | {problem_key} | '{key}' | {error_log}")
+                    for coord, error in error_log.items():
+                        self.logger.error(
+                            f"Validation error | {problem_key} | '{key}' | "
+                            f"{coord} | {error}"
+                        )
             else:
                 self.logger.error(
                     f"Validation | {problem_key} | Entries: "

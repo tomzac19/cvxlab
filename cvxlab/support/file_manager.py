@@ -847,27 +847,24 @@ class FileManager:
         Returns:
             Dict[str, str]: Dictionary of problems found.
         """
-        problems = {}
+        errors = {}
         optional_label = Defaults.DefaultStructures.OPTIONAL
         any_label = Defaults.DefaultStructures.ANY
-        all_optional_fields = False
 
-        if all(
+        all_optional_fields = all(
             isinstance(v_exp, tuple) and v_exp[0] == optional_label
             for v_exp in validation_structure.values()
-        ):
-            all_optional_fields = True
+        )
 
         for k_exp, v_exp in validation_structure.items():
             current_path = f"{path}.{k_exp}" if path else k_exp
 
             # if no data are passed, all keys must be optional
             if not data:
-                if all_optional_fields:
-                    continue
-                else:
-                    problems[current_path] = f"Data structure is empty, but " \
+                if not all_optional_fields:
+                    errors[current_path] = f"Data structure is empty, but " \
                         "there are mandatory key-value pairs."
+                continue
 
             # check for keys and related values
             if isinstance(v_exp, tuple) and v_exp[0] == optional_label:
@@ -883,9 +880,9 @@ class FileManager:
 
             # check if mandatory keys are missing
             elif k_exp not in data:
-                if optional:
-                    continue
-                problems[current_path] = f"Missing key-value pair."
+                if not optional:
+                    errors[current_path] = f"Missing key-value pair."
+                continue
 
             # check values types and content for mandatory keys
             else:
@@ -893,32 +890,32 @@ class FileManager:
 
                 if isinstance(expected_value, type):
                     if not isinstance(value, expected_value | NoneType):
-                        problems[current_path] = \
+                        errors[current_path] = \
                             f"Expected {expected_value}, got {type(value)}"
                     if not optional and not value:
-                        problems[current_path] = "Empty value."
+                        errors[current_path] = "Empty value."
 
                 elif isinstance(expected_value, tuple):
                     if all(isinstance(v, type) for v in expected_value):
                         if not any(isinstance(value, v | NoneType) for v in expected_value):
-                            problems[current_path] = \
+                            errors[current_path] = \
                                 f"Expected {expected_value}, got {type(value)}"
                         if not optional and not value:
-                            problems[current_path] = "Empty value."
+                            errors[current_path] = "Empty value."
 
                 # check for nested dictionaries
                 elif isinstance(expected_value, dict):
                     if isinstance(value, dict):
-                        problems.update(
+                        errors.update(
                             self.validate_data_structure(
                                 value, expected_value, current_path)
                         )
                     else:
-                        problems[current_path] = \
+                        errors[current_path] = \
                             f"Expected dict, got {type(value).__name__}"
 
                 else:
-                    problems[current_path] = "Unexpected value."
+                    errors[current_path] = "Unexpected value."
 
         # in case data is empty, no further checks required
         if isinstance(data, dict):
@@ -929,7 +926,8 @@ class FileManager:
 
                     # check for unexpected keys
                     if any_label not in validation_structure:
-                        problems[current_path] = "Unexpected key-value pair."
+                        errors[current_path] = f"Unexpected key '{key}'. Valid keys: " \
+                            f"{list(validation_structure)}."
 
                     # check for nested dictionaries
                     else:
@@ -940,15 +938,15 @@ class FileManager:
                             expected_value = validation_structure[any_label]
 
                         if isinstance(value, dict):
-                            problems.update(
+                            errors.update(
                                 self.validate_data_structure(
                                     value, expected_value, current_path)
                             )
 
-        problems = util.remove_empty_items_from_dict(
-            problems, empty_values=[{}])
+        errors = util.remove_empty_items_from_dict(
+            errors, empty_values=[{}])
 
-        return problems
+        return errors
 
     def __repr__(self):
         """Return string representation of FileManager instance."""

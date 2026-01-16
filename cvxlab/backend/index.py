@@ -318,8 +318,10 @@ class Index:
                 self.logger.error(
                     f"Validation error report ===================================")
                 for key, error_log in invalid_entries.items():
-                    self.logger.error(
-                        f"Validation error | {data_structure_key} | '{key}' | {error_log}")
+                    for coord, error in error_log.items():
+                        self.logger.error(
+                            f"Validation error | {data_structure_key} | '{key}' | "
+                            f"{coord} | {error}")
             else:
                 self.logger.error(
                     f"Validation | {data_structure_key} | Entries: "
@@ -628,7 +630,8 @@ class Index:
                             if property_value[dim_key] not in allowed_dims:
                                 problems[f"{path}.{property_key}.{dim_key}"] = \
                                     f"Coordinate '{property_key}': " \
-                                    f"dimension '{property_value[dim_key]}' not allowed."
+                                    f"dimension '{property_value[dim_key]}' not allowed. " \
+                                    f"Allowed dimensions: {allowed_dims}."
 
                         # check if filters are allowed
                         if filters_key in property_value:
