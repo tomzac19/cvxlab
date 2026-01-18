@@ -257,11 +257,12 @@ class Defaults:
 
         OPTIONAL = object()
         ANY = object()
+        METADATA = 'description'
 
         SET_STRUCTURE = (
             'set_key:',
             {
-                'description': (OPTIONAL, str),
+                METADATA: (OPTIONAL, str),
                 'split_problem': (OPTIONAL, bool),
                 'copy_from': (OPTIONAL, str),
                 'filters': (OPTIONAL, {ANY: list}),
@@ -272,7 +273,7 @@ class Defaults:
         DATA_TABLE_STRUCTURE = (
             'table_key:',
             {
-                'description': (OPTIONAL, str),
+                METADATA: (OPTIONAL, str),
                 'type': (str, dict),
                 'integer': (OPTIONAL, bool),
                 'coordinates': (str, list),
@@ -295,7 +296,7 @@ class Defaults:
             {
                 'objective': (OPTIONAL, list),
                 'expressions': list,
-                'description': (OPTIONAL, list),
+                METADATA: (OPTIONAL, list),
             }
         )
 

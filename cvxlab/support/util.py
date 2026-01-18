@@ -1187,7 +1187,11 @@ def pivot_dataframe_to_data_structure(
             value = row[column]
             if value is not None:
                 if not skip_process_str:
-                    inner_dict[column] = util_text.process_str(value)
+                    # string is processed except for metadata column
+                    if column != Defaults.DefaultStructures.METADATA:
+                        inner_dict[column] = util_text.process_str(value)
+                    else:
+                        inner_dict[column] = value
                 else:
                     inner_dict[column] = value
 
@@ -1219,7 +1223,10 @@ def pivot_dataframe_to_data_structure(
 
                 value = row[column]
                 if value is not None:
-                    inner_dict[column] = util_text.process_str(value)
+                    if column != Defaults.DefaultStructures.METADATA:
+                        inner_dict[column] = util_text.process_str(value)
+                    else:
+                        inner_dict[column] = value
 
             data_structure[outern_key][secondary_key][inner_key] = inner_dict
 
