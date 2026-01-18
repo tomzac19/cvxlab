@@ -1016,6 +1016,10 @@ class Problem:
         and the data tables definitions in the index. Specific checks include:
 
         - For mixed type data tables, table types must be specified for all problems.
+        - For variables generated from the same pure endogenous data tables, 
+            in case these are used in multiple problems, a warning is raised.
+            This is indeed a strange modelling choice, as pure endogenous variables
+            should ideally be unique to each problem. 
         - further checks can be added here ...
 
         Raises:
@@ -1025,6 +1029,8 @@ class Problem:
             f"Checking coherence between symbolic problems and data tables.")
 
         source_format = self.settings['model_settings_from']
+        data_table_types = Defaults.SymbolicDefinitions.VARIABLE_TYPES
+        problems_expressions = self._collect_problems_expressions()
 
         errors = []
 
@@ -1053,6 +1059,27 @@ class Problem:
                             f"Data table '{table_key}' | Missing type definition "
                             f"for problem keys: {missing_keys}."
                         )
+
+            # pure endogenous variables from same data table used in multiple problems
+            if isinstance(self.symbolic_problem, dict):
+                if data_table.type == data_table_types['ENDOGENOUS']:
+
+                    for variable in data_table.variables_list:
+                        used_in_problems = [
+                            problem_key
+                            for problem_key, expr_list in problems_expressions.items()
+                            if any(
+                                var_key == variable
+                                for expression in expr_list
+                                for var_key in self._get_vars_in_expression(expression).keys()
+                            )
+                        ]
+                        if len(used_in_problems) > 1:
+                            self.logger.warning(
+                                f"Data table '{table_key}' | Variable '{variable}' | "
+                                f"Pure endogenous variable used in multiple problems: "
+                                f"{used_in_problems}."
+                            )
 
         if errors:
             self.logger.error(
