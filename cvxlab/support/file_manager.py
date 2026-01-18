@@ -629,6 +629,7 @@ class FileManager:
         try:
             df = xlsx.parse(
                 sheet_name=sheet_name,
+                dtype_backend="python" if hasattr(pd, "options") else None,
                 keep_default_na=True,
             )
         except Exception as e:
@@ -656,6 +657,7 @@ class FileManager:
             dataframe = pd.read_csv(
                 file_path,
                 keep_default_na=True,
+                dtype_backend="python" if hasattr(pd, "options") else None,
             )
         except Exception as error:
             msg = f"CSV parsing error | file '{file_path.name}' | {str(error)}"
