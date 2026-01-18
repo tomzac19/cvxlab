@@ -272,6 +272,7 @@ class Core:
             var_list_to_update: List[str] = [],
             filter_negative_values: bool = False,
             warnings_on_negatives: bool = False,
+            validate_types: bool = True,
     ) -> None:
         """Fetch data from the database and assign it to cvxpy exogenous variables.
 
@@ -297,7 +298,11 @@ class Core:
                 update. If empty, updates all exogenous variables. Defaults to [].
             filter_negative_values (bool, optional): If True, checks
                 if variable data comply with nonneg attribute defined for the
-                variable, putting negative values to zero.
+                variable, putting negative values to zero. Defaults to False.
+            warnings_on_negatives (bool, optional): If True, logs warnings when
+                negative values are found and filtered out. Defaults to False.
+            validate_types (bool, optional): If True, validates the types of
+                the data against allowed types. Defaults to True.
 
         Raises:
             TypeError: If 'var_list_to_update' is not a list.
@@ -431,25 +436,26 @@ class Core:
                                 filters_dict=variable_data[filter_header][combination]
                             )
 
-                            # check if variable data are int or float
-                            non_allowed_ids = util.find_non_allowed_types(
-                                dataframe=raw_data,
-                                allowed_types=allowed_values_types,
-                                target_col_header=values_header,
-                                return_col_header=id_header,
-                                allow_none=allow_none_values,
-                            )
+                            if validate_types:
+                                # check if variable data are int or float
+                                non_allowed_ids = util.find_non_allowed_types(
+                                    dataframe=raw_data,
+                                    allowed_types=allowed_values_types,
+                                    target_col_header=values_header,
+                                    return_col_header=id_header,
+                                    allow_none=allow_none_values,
+                                )
 
-                            if non_allowed_ids:
-                                if len(non_allowed_ids) > 5:
-                                    non_allowed_ids = non_allowed_ids[:5] + \
-                                        [f"(total items {len(non_allowed_ids)})"]
-                                msg = f"Data for variable '{var_key}' in table " \
-                                    f"'{variable.related_table}' contains " \
-                                    f"non-allowed values types in rows: " \
-                                    f"{non_allowed_ids}."
-                                self.logger.error(msg)
-                                raise exc.MissingDataError(msg)
+                                if non_allowed_ids:
+                                    if len(non_allowed_ids) > 5:
+                                        non_allowed_ids = non_allowed_ids[:5] + \
+                                            [f"(total items {len(non_allowed_ids)})"]
+                                    msg = f"Data for variable '{var_key}' in table " \
+                                        f"'{variable.related_table}' contains " \
+                                        f"non-allowed values types in rows: " \
+                                        f"{non_allowed_ids}."
+                                    self.logger.error(msg)
+                                    raise exc.MissingDataError(msg)
 
                             # optionally, check if variable raw_data comply with sign
                             # constraints defined for the variable, eventually putting
@@ -1066,6 +1072,7 @@ class Core:
                                     scenarios_idx=scenario_idx,
                                     filter_negative_values=True,
                                     warnings_on_negatives=True,
+                                    validate_types=False,
                                 )
 
                             self.files.copy_file_to_destination(
