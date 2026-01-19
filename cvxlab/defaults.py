@@ -67,7 +67,7 @@ class Defaults:
         SQLITE_DATABASE_FILE = 'database.db'
         SQLITE_DATABASE_FILE_BKP = 'database_bkp.db'
         SQLITE_DATABASE_FILE_TEST = 'database_expected.db'
-        TEMPLATES_DIR_PATH = r'docs/templates'
+        TEMPLATES_DIR_PATH = r'cvxlab/templates'
         INSTANCES_DIR = 'instances'
         CUSTOM_OPERATORS_FILE_NAME = 'user_defined_operators.py'
         CUSTOM_CONSTANTS_FILE_NAME = 'user_defined_constants.py'

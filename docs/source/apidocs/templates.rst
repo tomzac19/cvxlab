@@ -11,7 +11,7 @@ This section documents the template modules included in the CVXlab package.
 User-defined symbolic operators
 -------------------------------
 
-.. automodule:: docs.templates.user_defined_operators
+.. automodule:: cvxlab.templates.user_defined_operators
   :members:
   :undoc-members: 
   :show-inheritance:
@@ -23,7 +23,7 @@ User-defined symbolic operators
 User-defined constants
 ----------------------
 
-.. automodule:: docs.templates.user_defined_constants
+.. automodule:: cvxlab.templates.user_defined_constants
   :members:
   :undoc-members: 
   :show-inheritance:

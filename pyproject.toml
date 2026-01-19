@@ -62,6 +62,9 @@ where = ["."]
 include = ["cvxlab*"]
 exclude = ["tests*", "docs*"]
 
+[tool.setuptools.package-data]
+cvxlab = ["templates/*.py"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"

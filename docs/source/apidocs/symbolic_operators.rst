@@ -75,7 +75,7 @@ in two ways:
 2. *Defining a new custom symbolic operator in the model directory.*
    To accomplish this, users can define new operator/s as regular functions in 
    the :ref:`user_defined_operators.py <api_user_defined_operators>` file (template 
-   can be found in ``template/user_defined_operators.py``). New operators are loaded 
+   can be found in ``cvxlab/templates/user_defined_operators.py``). New operators are loaded 
    once Model instance is generated. This way, users can use their own custom 
    symbolic operators in defining problems without modifying the package code 
    (ideal for model users).
