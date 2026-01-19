@@ -585,51 +585,60 @@ class Database:
             raise exc.SettingsError(msg)
 
         # case 1: load from a single excel file with multiple tabs
+        # data are all loaded into a dataframe, then commited to the database
         if not self.settings['multiple_input_files']:
             file_name = Defaults.ConfigFiles.INPUT_DATA_FILE_NAME
 
-            data = self.files.excel_to_dataframes_dict(
+            data_dict = self.files.excel_to_dataframes_dict(
                 excel_file_dir_path=self.paths['input_data_dir'],
                 excel_file_name=f"{file_name}.{file_extension}",
             )
 
-        # case 2: load from multiple files
-        else:
-            data = {}
+            with db_handler(self.sqltools):
+                for table_key, dataframe in data_dict.items():
+                    if table_key not in table_key_list:
+                        continue
 
-            for table_key, table in self.index.data.items():
-                table: DataTable
-
-                if table_key not in table_key_list:
-                    continue
-
-                if table.type not in [
-                    Defaults.SymbolicDefinitions.VARIABLE_TYPES['ENDOGENOUS'],
-                    Defaults.SymbolicDefinitions.VARIABLE_TYPES['CONSTANT']
-                ]:
-                    file_name = f"{table_key}.{file_extension}"
-
-                    data[table_key] = self.files.file_to_dataframe(
-                        file_name=file_name,
-                        file_dir_path=self.paths['input_data_dir'],
+                    dataframe = util.normalize_dataframe(df=dataframe)
+                    self.sqltools.dataframe_to_table(
+                        table_name=table_key,
+                        dataframe=dataframe,
+                        force_overwrite=force_overwrite,
+                        action='update',
                     )
 
-        # commit to database
-        with db_handler(self.sqltools):
-            for table_key, table in data.items():
-                table: pd.DataFrame
+        # case 2: load from multiple files
+        # each data table is loaded from a separate file and committed to the database
+        else:
+            data_dict = {}
 
-                if table_key not in table_key_list:
-                    continue
+            with db_handler(self.sqltools):
+                for table_key, table in self.index.data.items():
+                    table: DataTable
 
-                table = util.normalize_dataframe(df=table)
+                    if table_key not in table_key_list:
+                        continue
 
-                self.sqltools.dataframe_to_table(
-                    table_name=table_key,
-                    dataframe=table,
-                    force_overwrite=force_overwrite,
-                    action='update',
-                )
+                    if table.type not in [
+                        Defaults.SymbolicDefinitions.VARIABLE_TYPES['ENDOGENOUS'],
+                        Defaults.SymbolicDefinitions.VARIABLE_TYPES['CONSTANT']
+                    ]:
+                        file_name = f"{table_key}.{file_extension}"
+
+                        data_dict[table_key] = self.files.file_to_dataframe(
+                            file_name=file_name,
+                            file_dir_path=self.paths['input_data_dir'],
+                        )
+
+                        dataframe = util.normalize_dataframe(
+                            df=data_dict[table_key])
+
+                        self.sqltools.dataframe_to_table(
+                            table_name=table_key,
+                            dataframe=dataframe,
+                            force_overwrite=force_overwrite,
+                            action='update',
+                        )
 
     def fill_nan_values_in_database(
             self,

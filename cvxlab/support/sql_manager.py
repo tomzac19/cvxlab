@@ -464,9 +464,10 @@ class SQLManager:
 
         if foreign_keys:
             self.logger.debug(
-                f"SQLite table '{table_name}' - created with foreign keys.")
+                f"SQLite table generation with foreign keys | Table name: '{table_name}'")
         else:
-            self.logger.debug(f"SQLite table '{table_name}' - created.")
+            self.logger.debug(
+                f"SQLite table generation | Table name: '{table_name}'")
 
     def switch_foreing_keys(self, switch: bool) -> None:
         """Enable/disable the enforcement of foreign key constraints.
@@ -724,6 +725,8 @@ class SQLManager:
             self.logger.warning(msg)
             return
 
+        dataframe = dataframe.copy(deep=True)
+
         id_field = Defaults.Labels.ID_FIELD['id'][0]
         values_field = Defaults.Labels.VALUES_FIELD['values'][0]
         table_existing_entries = self.count_table_data_entries(table_name)
@@ -767,7 +770,7 @@ class SQLManager:
         # convert all entries to strings except for id and values field
         for col in dataframe.columns:
             if col not in (id_field, values_field):
-                dataframe[col] = dataframe[col].astype(str)
+                dataframe[col] = dataframe[col].astype("string[python]")
 
         # case of no entries in existing table or case of 'overwrite' action
         if table_existing_entries == 0 or action == 'overwrite':
@@ -860,7 +863,6 @@ class SQLManager:
             f"action '{action}' | "
             f"entries: {len(data)}"
         )
-
         if batch_calculated:
             log_msg += f" | batched data transfer"
 
