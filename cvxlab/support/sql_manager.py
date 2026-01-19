@@ -728,6 +728,7 @@ class SQLManager:
         values_field = Defaults.Labels.VALUES_FIELD['values'][0]
         table_existing_entries = self.count_table_data_entries(table_name)
         df_existing = self.table_to_dataframe(table_name)
+        batch_calculated = False
 
         # check if dataframes columns are matching (except id_field)
         if not util.check_dataframe_columns_equality(
@@ -834,7 +835,6 @@ class SQLManager:
                 dataframe_with_id = dataframe_with_id[df_existing.columns]
 
             # auto-calculate batch_size in query execution
-            batch_calculated = False
             if batch_size is None:
                 batch_size = self._calculate_optimal_batch_size(
                     dataframe_with_id)
